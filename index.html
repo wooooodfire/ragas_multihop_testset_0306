@@ -102,10 +102,10 @@
             // 建立表頭與腳部
             const hRow = $('#headerRow');
             const fRow = $('#footerRow');
-            sortedCols.forEach(col => {
-                hRow.append(`<th>${col}</th>`);
-                fRow.append(`<th><input type="text" placeholder="篩選..." /></th>`);
-            });
+            // sortedCols.forEach(col => {
+            //     hRow.append(`<th>${col}</th>`);
+            //     fRow.append(`<th><input type="text" placeholder="篩選..." /></th>`);
+            // });
 
             $('#resultTable').DataTable({
                 data: results.data,
