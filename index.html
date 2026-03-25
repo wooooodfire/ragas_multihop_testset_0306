@@ -1,163 +1,107 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QA Result</title>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background: #f5f5f5; }
-        h1 { color: #333; text-align: center; }
-        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow-x: auto; }
+<div style="margin-bottom: 20px; text-align: center;">
+    <label for="csvSelector" style="font-weight: bold;">選擇資料來源：</label>
+    <select id="csvSelector" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ccc;">
+        <option value="multihop_qa_kg2_20260308_163710_result.csv">預設檔案 (163710)</option>
+        <option value="another_result_file.csv">另一個結果檔案.csv</option>
+        <option value="test_data.csv">測試資料.csv</option>
+    </select>
+</div>
+
+<div class="container">
+    <table id="resultTable" class="display nowrap" style="width:100%">
+        <thead><tr id="headerRow"></tr></thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="footerRow"></tfoot>
+    </table>
+</div>
+
+<script>
+    // 指定優先顯示的順序
+    const priorityCols = [
+        'question', 'answer', 'context_1hop', 'context_2hop', 
+        'geval_Relevance_multi', 'geval_Agnosticism_multi', 
+        'geval_Completeness_multi', 'geval_Accuracy_multi', 
+        'geval_Reasonableness_multi', 'geval_情境連貫性', 'geval_跨文件必要性'
+    ];
+
+    $(document).ready(function() {
+        // 初始載入
+        loadCsvData($('#csvSelector').val());
+
+        // 當選單改變時觸發
+        $('#csvSelector').on('change', function() {
+            const selectedFile = $(this).val();
+            loadCsvData(selectedFile);
+        });
+    });
+
+    function loadCsvData(fileName) {
+        // 如果表格已經存在，先銷毀它並清空 HTML 內容，以便重新繪製表頭
+        if ($.fn.DataTable.isDataTable('#resultTable')) {
+            $('#resultTable').DataTable().destroy();
+            $('#headerRow').empty();
+            $('#tableBody').empty();
+            $('#footerRow').empty();
+        }
+
+        Papa.parse(fileName, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                renderTable(results);
+            },
+            error: function(err) {
+                alert("讀取檔案失敗: " + fileName);
+            }
+        });
+    }
+
+    function renderTable(results) {
+        const allCols = results.meta.fields;
         
-        /* 表格儲存格樣式 */
-        table.dataTable td { vertical-align: top; font-size: 14px; }
-        
-        /* 針對需要展開的欄位 (Contexts) */
-        .content-cell { position: relative; max-width: 450px; }
-        .expandable {
-            max-height: 100px;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-            white-space: pre-wrap;
-            font-size: 13px;
-            color: #444;
-            line-height: 1.5;
-        }
-        .expandable.expanded { max-height: 3000px; }
-        .toggle-btn {
-            display: block;
-            margin-top: 5px;
-            color: #007bff;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        /* Question & Answer 完整顯示，不收合 */
-        .full-text {
-            white-space: pre-wrap;
-            min-width: 250px;
-            max-width: 500px;
-            line-height: 1.6;
-        }
-
-        /* 指標分數標色 */
-        .score-col { font-weight: bold; color: #d9534f; text-align: center; display: block; }
-        
-        /* 篩選器樣式 */
-        tfoot input {
-            width: 100%;
-            padding: 5px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <table id="resultTable" class="display nowrap" style="width:100%">
-            <thead><tr id="headerRow"></tr></thead>
-            <tbody id="tableBody"></tbody>
-            <tfoot id="footerRow"></tfoot>
-        </table>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
-    <script>
-        const csvFileName = "multihop_qa_kg2_20260308_163710_result.csv";
-
-        // 指定優先顯示的順序
-        const priorityCols = [
-            'question', 'answer', 'context_1hop', 'context_2hop', 
-            'geval_Relevance_multi', 'geval_Agnosticism_multi', 
-            'geval_Completeness_multi', 'geval_Accuracy_multi', 
-            'geval_Reasonableness_multi', 'geval_情境連貫性', 'geval_跨文件必要性'
+        const sortedCols = [
+            ...priorityCols.filter(c => allCols.includes(c)),
+            ...allCols.filter(c => !priorityCols.includes(c))
         ];
 
-        $(document).ready(function() {
-            Papa.parse(csvFileName, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    renderTable(results);
-                }
-            });
+        const hRow = $('#headerRow');
+        sortedCols.forEach(col => {
+            hRow.append(`<th>${col}</th>`);
         });
 
-        function renderTable(results) {
-            const allCols = results.meta.fields;
-            
-            // 重新排列欄位：優先欄位 + 剩下的欄位
-            const sortedCols = [
-                ...priorityCols.filter(c => allCols.includes(c)),
-                ...allCols.filter(c => !priorityCols.includes(c))
-            ];
-
-            // 建立表頭與腳部
-            const hRow = $('#headerRow');
-            const fRow = $('#footerRow');
-            sortedCols.forEach(col => {
-                hRow.append(`<th>${col}</th>`);
-                // fRow.append(`<th><input type="text" placeholder="篩選..." /></th>`);
-            });
-
-            $('#resultTable').DataTable({
-                data: results.data,
-                columns: sortedCols.map(col => ({
-                    data: col,
-                    render: function(val, type, row) {
-                        if (!val) return "";
-
-                        // 1. Question & Answer: 完整顯示
-                        if (['question', 'answer'].includes(col)) {
-                            return `<div class="full-text">${val}</div>`;
-                        }
-
-                        // 2. Contexts: 保留展開/收合功能
-                        if (col.includes('context')) {
-                            return `
-                                <div class="content-cell">
-                                    <div class="expandable">${val}</div>
-                                    <span class="toggle-btn" onclick="toggleText(this)">[展開全文]</span>
-                                </div>`;
-                        }
-
-                        // 3. Geval 分數: 標色
-                        if (col.startsWith('geval_')) {
-                            return `<span class="score-col">${val}</span>`;
-                        }
-
-                        return val;
+        $('#resultTable').DataTable({
+            data: results.data,
+            columns: sortedCols.map(col => ({
+                data: col,
+                render: function(val, type, row) {
+                    if (!val) return "";
+                    if (['question', 'answer'].includes(col)) {
+                        return `<div class="full-text">${val}</div>`;
                     }
-                })),
-                pageLength: 20,
-                scrollX: true,
-                dom: 'lrtip',
-                initComplete: function () {
-                    this.api().columns().every(function () {
-                        const that = this;
-                        $('input', this.footer()).on('keyup change clear', function () {
-                            if (that.search() !== this.value) {
-                                that.search(this.value).draw();
-                            }
-                        });
-                    });
+                    if (col.includes('context')) {
+                        return `
+                            <div class="content-cell">
+                                <div class="expandable">${val}</div>
+                                <span class="toggle-btn" onclick="toggleText(this)">[展開全文]</span>
+                            </div>`;
+                    }
+                    if (col.startsWith('geval_')) {
+                        return `<span class="score-col">${val}</span>`;
+                    }
+                    return val;
                 }
-            });
-        }
+            })),
+            pageLength: 20,
+            scrollX: true,
+            dom: 'lrtip'
+        });
+    }
 
-        function toggleText(btn) {
-            const $btn = $(btn);
-            const $content = $btn.prev('.expandable');
-            $content.toggleClass('expanded');
-            $btn.text($content.hasClass('expanded') ? '[收合內容]' : '[展開全文]');
-        }
-    </script>
-</body>
-</html>
+    function toggleText(btn) {
+        const $btn = $(btn);
+        const $content = $btn.prev('.expandable');
+        $content.toggleClass('expanded');
+        $btn.text($content.hasClass('expanded') ? '[收合內容]' : '[展開全文]');
+    }
+</script>
